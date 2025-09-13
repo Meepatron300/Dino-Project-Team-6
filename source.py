@@ -1,5 +1,6 @@
 import webbrowser
 import time
+import keyboard
 import pyautogui as pag
 from PIL import ImageGrab
 
@@ -41,18 +42,74 @@ pag.click(1275, 450)
 pag.click(1275, 500)
 time.sleep(0.5)
 
-# short hops need to be an early thing and big jumps need to be in the middle and ducks are last minute
-short_x = 550 #B
-short_y = 680 #B
-tall_x = 650 #g
-tall_y = 680 #g
-duck_x = 550 #G
-duck_y = 650 #G
-pag.click(duck_x, duck_y)
+# Use pag.click("target_x, target_y") to test where the coords actually are
+# Key: G - good; B - bad; Uppercase - high confidence; Lowercase - low confidence.
+# Trigger coords:
+sky_sensor = [400,500] #G
+jump_trig = [750,680] #g
+high_jump_trig = [650,680] #g
+duck_trig = [550,650] #g
 
+# 0: bottom left sensor, 1: top left sensor, 2: bottom right sensor
+type_sense = [[800,680], [800,650], [900,680]]
+
+# Expand the bounding box as needed (left, top, right, bottom)
+bBox = (399, 499, 901, 681)
+
+action_queue = ["empty"]
+
+# Game start
+pag.keyDown("Space")
+sens_cd_base = game_start = time.perf_counter()
+
+print(game_start)
 # IMPORTANT: The White Background is (247, 247, 247) and the contrasting color is (83, 83, 83)
-screen_capture = ImageGrab.grab()
-short_y
-pixel_rgb = screen_capture.getpixel((short_x, short_y))
+# Main sight logic, will run till the escape key is pressed
+while not keyboard.is_pressed('Esc'):
+    screen_capture = ImageGrab.grab(bbox=bBox)
+    sky_color = screen_capture.getpixel((sky_sensor[0]-bBox[0], sky_sensor[1]-bBox[1]))
+    sensor_1 = screen_capture.getpixel((type_sense[0][0]-bBox[0], type_sense[0][1]-bBox[1]))
+    sensor_2 = screen_capture.getpixel((type_sense[1][0]-bBox[0], type_sense[1][1]-bBox[1]))
+    sensor_3 = screen_capture.getpixel((type_sense[2][0]-bBox[0], type_sense[2][1]-bBox[1]))
 
-print(f"The RGB color of the pixel at ({short_x}, {short_y}) is: {pixel_rgb}")
+    # Removes the empty list buffer for actual queue usage
+    if action_queue[0] == "empty":
+        action_queue.pop(0)
+
+    # Is the sensor on cooldown?
+    if time.perf_counter() > sens_cd_base + 0.5:
+        # What sensors are active?
+        if sensor_1 != sky_color:
+            if sensor_3 != sky_color or sensor_2 != sky_color:
+                action_queue.append("high jump")
+            else:
+                action_queue.append("jump")
+            sens_cd_base = time.perf_counter()
+        elif sensor_2 != sky_color:
+            action_queue.append("duck")
+            sens_cd_base = time.perf_counter()
+
+    # Protects the detector from an empty list should the action queue be cleared
+    if len(action_queue) == 0:
+        action_queue.append("empty")
+
+    # Looks for the next trigger needed based on the action queue
+    if action_queue[0] == "jump":
+        if screen_capture.getpixel((jump_trig[0]-bBox[0], jump_trig[1]-bBox[1])) == sky_color:
+            executeAction(action_queue[0])
+            print(action_queue[0])
+            action_queue.pop(0)
+    elif action_queue[0] == "high jump":
+        if screen_capture.getpixel((high_jump_trig[0]-bBox[0], high_jump_trig[1]-bBox[1])) == sky_color:
+            executeAction(action_queue[0])
+            print(action_queue[0])
+            action_queue.pop(0)
+    elif action_queue[0] == "duck":
+        if screen_capture.getpixel((duck_trig[0]-bBox[0], duck_trig[1]-bBox[1])) == sky_color:
+            executeAction(action_queue[0])
+            print(action_queue[0])
+            action_queue.pop(0)
+    
+    # Protects the empty list detector
+    if len(action_queue) == 0:
+        action_queue.append("empty")
